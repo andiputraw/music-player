@@ -8,9 +8,14 @@ pub const ButtonState = struct {
 
 pub const ButtonStateList = std.ArrayList(ButtonState);
 
-pub const StateType = extern struct { foo: i32 };
+pub const StateType = extern struct { is_playing: bool };
 pub const InnerState = struct {
     music_logo: ray.Image,
     music_texture: ray.Texture,
     start_button_texture: ray.Texture,
+    pause_button_texture: ray.Texture,
+    prev_button_texture: ray.Texture,
+    next_button_texture: ray.Texture,
+    loop_button_texture: ray.Texture,
+    shuffle_button_texture: ray.Texture,
 };

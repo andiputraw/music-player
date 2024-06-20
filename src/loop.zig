@@ -2,42 +2,58 @@ const ApplicationState = @import("state.zig");
 const ray = @import("raylib.zig");
 const std = @import("std");
 const ui = @import("ui/ui.zig");
+const fileDialog = @import("tinyfiledialog.zig");
 
-var InnerState: ApplicationState.InnerState = undefined;
-/// Button States. it will not be preserved each hot reloaded.
-var button_states: ApplicationState.ButtonStateList = undefined;
+var innerState: ApplicationState.InnerState = undefined;
 var mem: [4089]u8 = undefined;
 var fba = std.heap.FixedBufferAllocator.init(&mem);
 const allocator = fba.allocator();
 
-export var state = ApplicationState.StateType{
-    .foo = 0,
-};
+export var appState: ApplicationState.StateType = undefined;
 
 export fn getState() ApplicationState.StateType {
-    return state;
+    return appState;
 }
 
 export fn setState(newState: ApplicationState.StateType) void {
-    state = newState;
+    appState = newState;
 }
 
 export fn init() void {
-    button_states = ApplicationState.ButtonStateList.init(allocator);
-
-    InnerState.music_logo = ray.LoadImage("./assets/notes.png");
+    innerState.music_logo = ray.LoadImage("./assets/notes.png");
     resizeImageForNowPlaying();
-    InnerState.music_texture = ray.LoadTextureFromImage(InnerState.music_logo);
+    innerState.music_texture = ray.LoadTextureFromImage(innerState.music_logo);
+    const shuffle_button_img = ray.LoadImage("./assets/shuffle_button.png");
+    const loop_button_img = ray.LoadImage("./assets/loop_button.png");
     const start_button_img = ray.LoadImage("./assets/start_button.png");
-    InnerState.start_button_texture = ray.LoadTextureFromImage(start_button_img);
+    const pause_button_img = ray.LoadImage("./assets/pause_button.png");
+    const prev_button_image = ray.LoadImage("./assets/prev_button.png");
+    const next_button_image = ray.LoadImage("./assets/next_button.png");
+
+    innerState.loop_button_texture = ray.LoadTextureFromImage(loop_button_img);
+    innerState.start_button_texture = ray.LoadTextureFromImage(start_button_img);
+    innerState.pause_button_texture = ray.LoadTextureFromImage(pause_button_img);
+    innerState.prev_button_texture = ray.LoadTextureFromImage(prev_button_image);
+    innerState.next_button_texture = ray.LoadTextureFromImage(next_button_image);
+    innerState.shuffle_button_texture = ray.LoadTextureFromImage(shuffle_button_img);
+
+    ray.UnloadImage(loop_button_img);
     ray.UnloadImage(start_button_img);
+    ray.UnloadImage(pause_button_img);
+    ray.UnloadImage(prev_button_image);
+    ray.UnloadImage(next_button_image);
+    ray.UnloadImage(shuffle_button_img);
+
     std.log.debug("Init", .{});
 }
 
 export fn cleanup() void {
-    ray.UnloadTexture(InnerState.music_texture);
-    ray.UnloadImage(InnerState.music_logo);
-    ray.UnloadTexture(InnerState.start_button_texture);
+    ray.UnloadImage(innerState.music_logo);
+    ray.UnloadTexture(innerState.music_texture);
+    ray.UnloadTexture(innerState.start_button_texture);
+    ray.UnloadTexture(innerState.prev_button_texture);
+    ray.UnloadTexture(innerState.next_button_texture);
+    ray.UnloadTexture(innerState.shuffle_button_texture);
 }
 
 export fn onResize() void {
@@ -47,7 +63,7 @@ export fn onResize() void {
 }
 
 fn resizeImageForNowPlaying() void {
-    ray.ImageResizeNN(&InnerState.music_logo, 320, 320);
+    ray.ImageResizeNN(&innerState.music_logo, 320, 320);
 }
 
 export fn loop() void {
@@ -91,14 +107,14 @@ fn intToFloat(in: i32) f32 {
 pub fn drawMusicNowPlaying(nowPlayingRect: ray.Rectangle) void {
     ray.DrawRectangleRounded(nowPlayingRect, 0.2, 4, ray.Color.newFromHex(0x1F1F1F));
 
-    const musicRect = ray.Rectangle.new(0, 0, intToFloat(InnerState.music_texture.width), intToFloat(InnerState.music_texture.height));
+    const musicRect = ray.Rectangle.new(0, 0, intToFloat(innerState.music_texture.width), intToFloat(innerState.music_texture.height));
     const draw_x = nowPlayingRect.x + (nowPlayingRect.width / 2.0) - 20;
     const draw_y = nowPlayingRect.y + (nowPlayingRect.height / 2.0);
 
-    const musicDrawRect = ray.Rectangle.new(draw_x, draw_y, intToFloat(InnerState.music_texture.width), intToFloat(InnerState.music_texture.height));
-    const musicCenter = ray.Vector2.new(intToFloat(InnerState.music_texture.width) / 2.0, intToFloat(InnerState.music_texture.height) / 2.0);
+    const musicDrawRect = ray.Rectangle.new(draw_x, draw_y, intToFloat(innerState.music_texture.width), intToFloat(innerState.music_texture.height));
+    const musicCenter = ray.Vector2.new(intToFloat(innerState.music_texture.width) / 2.0, intToFloat(innerState.music_texture.height) / 2.0);
 
-    ray.DrawTexturePro(InnerState.music_texture, musicRect, musicDrawRect, musicCenter, 0, ray.Color.WHITE);
+    ray.DrawTexturePro(innerState.music_texture, musicRect, musicDrawRect, musicCenter, 0, ray.Color.WHITE);
 }
 
 pub fn drawControlButton(audioButtonRect: ray.Rectangle) void {
@@ -110,6 +126,7 @@ pub fn drawControlButton(audioButtonRect: ray.Rectangle) void {
     const hover_bg_color = ray.Color.newFromHex(0x444446);
     const button_height = audioButton.height * 0.8;
     const button_y = audioButton.y + (audioButton.height / 2.0) - (button_height / 2.0);
+    const button_w = 80;
     const center_x = audioButton.width / 2.0;
     const button_style = ui.button.ButtonStyle{
         .background_color = bg_color,
@@ -119,42 +136,50 @@ pub fn drawControlButton(audioButtonRect: ray.Rectangle) void {
         .texture_height = 24,
         .texture_width = 24,
     };
+    const shuffle_button_style = ui.button.ButtonStyle{
+        .background_color = bg_color,
+        .hover_bg_color = hover_bg_color,
+        .text_color = text_color,
+        .font_size = 20,
+        .texture_height = 32,
+        .texture_width = 48,
+    };
+    var shuffleButton = ui.button.newWithTexture(innerState.shuffle_button_texture, center_x - button_w - 120, button_y, button_w, button_height);
+    shuffleButton.setStyle(shuffle_button_style);
 
-    var playButton = ui.button.newWithTexture(InnerState.start_button_texture, center_x - 200, button_y, 50, button_height);
+    var prevButton = ui.button.newWithTexture(innerState.prev_button_texture, center_x - button_w - 20, button_y, button_w, button_height);
+    prevButton.setStyle(button_style);
+
+    const play_button_texture = if (appState.is_playing) innerState.pause_button_texture else innerState.start_button_texture;
+    var playButton = ui.button.newWithTexture(play_button_texture, center_x, button_y, button_w, button_height);
     playButton.setOnClick(onClickPlay);
     playButton.setStyle(button_style);
 
-    var pauseButton = ui.button.new(center_x - 100, button_y, 50, button_height, "Pause");
-    pauseButton.setStyle(button_style);
-    pauseButton.setOnClick(onClickPause);
-
-    var stopButton = ui.button.new(center_x, button_y, 50, button_height, "Stop");
-    stopButton.setStyle(button_style);
-    stopButton.setOnClick(onClickPause);
-
-    var nextButton = ui.button.new(center_x + 100, button_y, 50, button_height, "Next");
+    var nextButton = ui.button.newWithTexture(innerState.next_button_texture, center_x + button_w + 20, button_y, button_w, button_height);
     nextButton.setStyle(button_style);
 
-    var prevButton = ui.button.new(center_x + 200, button_y, 50, button_height, "Prev");
-    prevButton.setStyle(button_style);
+    var loopButton = ui.button.newWithTexture(innerState.loop_button_texture, center_x + button_w + 120, button_y, button_w, button_height);
+    loopButton.setStyle(button_style);
 
+    shuffleButton.update();
     playButton.update();
-    pauseButton.update();
-    stopButton.update();
     nextButton.update();
     prevButton.update();
+    loopButton.update();
 
+    shuffleButton.draw();
     playButton.draw();
-    pauseButton.draw();
-    stopButton.draw();
     nextButton.draw();
     prevButton.draw();
+    loopButton.draw();
 }
 
 fn onClickPlay() void {
-    std.debug.print("Play\n", .{});
-}
-
-fn onClickPause() void {
-    std.debug.print("Pause\n", .{});
+    appState.is_playing = !appState.is_playing;
+    const result = fileDialog.tinyfd_selectFolderDialog("Select Folder", null);
+    if (result) |path| {
+        std.debug.print("Selected {s}", .{path});
+    } else {
+        std.debug.print("Cancelled", .{});
+    }
 }

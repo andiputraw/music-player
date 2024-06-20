@@ -39,9 +39,11 @@ pub fn build(b: *std.Build) !void {
 
     exe.addIncludePath(.{ .cwd_relative = "./external/raylib/include" });
     exe.addLibraryPath(.{ .cwd_relative = "./external/raylib/lib" });
+    // exe.addLibraryPath(.{ .cwd_relative = "./external/tinyfiledialogs" });
+
     exe.linkSystemLibrary("miniaudio");
     exe.linkSystemLibrary("raylib");
-
+    // exe.linkSystemLibrary("tinyfiledialog");
     // This declares intent for the executable to be installed into the
     // standard location when the user invokes the "install" step (the default
     // step when running `zig build`).

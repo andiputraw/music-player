@@ -23,8 +23,8 @@ const c = @cImport({
 //     _ = c.getchar();
 // }
 
-const getStateT = *const fn () appState.StateType;
-const setStateT = *const fn (appState.StateType) void;
+const getStateT = *const fn () callconv(.C) appState.StateType;
+const setStateT = *const fn (appState.StateType) callconv(.C) void;
 const loopT = *const fn () void;
 const initT = *const fn () void;
 const cleanupT = *const fn () void;
@@ -40,7 +40,7 @@ const GameSymbol = struct {
     innerOnResize: onResizeT,
 
     pub fn new() GameSymbol {
-        var game_lib = std.DynLib.open("zig-out/lib/libloop.so") catch unreachable;
+        var game_lib = std.DynLib.open("zig-out/lib/libloop.so") catch @panic("Failed to open libloop.so");
         const initFn = game_lib.lookup(initT, "init") orelse @panic("Failed to get init symbol");
 
         initFn();
@@ -58,9 +58,11 @@ const GameSymbol = struct {
 
     pub fn reload(self: *GameSymbol) !void {
         self.innerCleanup();
+        const state = self.innerGetState();
         self.game_lib.close();
         var game_lib = try std.DynLib.open("zig-out/lib/libloop.so");
         self.game_lib = game_lib;
+        self.innerSetState(state);
         self.innerGetState = game_lib.lookup(getStateT, "getState") orelse unreachable;
         self.innerSetState = game_lib.lookup(setStateT, "setState") orelse unreachable;
         self.innerLoop = game_lib.lookup(loopT, "loop") orelse unreachable;

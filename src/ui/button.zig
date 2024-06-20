@@ -40,19 +40,11 @@ pub const Button = struct {
 
     pub fn update(self: *Button) void {
         if (ray.CheckCollisionPointRec(ray.GetMousePosition(), self.rect)) {
-            if (ray.IsMouseButtonPressed(ray.MouseButton.MOUSE_BUTTON_LEFT)) {
-                self.on_clicked = true;
-                std.log.debug("MOUSE LEFT PRESSED, Is clicked {}", .{self.on_clicked});
-            }
-
             if (ray.IsMouseButtonReleased(ray.MouseButton.MOUSE_BUTTON_LEFT)) {
-                std.log.debug("MOUSE LEFT RELEASE, Is clicked {}", .{self.on_clicked});
                 if (self.onClick) |callback| {
                     callback();
                 }
             }
-        } else {
-            self.on_clicked = false;
         }
     }
 
