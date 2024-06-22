@@ -1,6 +1,7 @@
 const std = @import("std");
 const ray = @import("./raylib.zig");
 const builtin = @import("builtin");
+const fileDialog = @import("tinyfiledialog.zig");
 const appState = @import("./state.zig");
 const miniaudio = @cImport({
     @cInclude("miniaudio.h");
@@ -30,6 +31,8 @@ const initT = *const fn () void;
 const cleanupT = *const fn () void;
 const onResizeT = *const fn () void;
 
+extern "c" fn dlerror() ?[*:0]const u8;
+
 const GameSymbol = struct {
     game_lib: std.DynLib,
     innerGetState: getStateT,
@@ -40,7 +43,11 @@ const GameSymbol = struct {
     innerOnResize: onResizeT,
 
     pub fn new() GameSymbol {
-        var game_lib = std.DynLib.open("zig-out/lib/libloop.so") catch @panic("Failed to open libloop.so");
+        var game_lib = std.DynLib.open("zig-out/lib/libloop.so") catch {
+            const err = dlerror() orelse "Unknown error";
+            std.debug.print("Failed to open libloop.so: {s}\n", .{err});
+            @panic("Failed to open libloop.so");
+        };
         const initFn = game_lib.lookup(initT, "init") orelse @panic("Failed to get init symbol");
 
         initFn();
@@ -57,12 +64,11 @@ const GameSymbol = struct {
     }
 
     pub fn reload(self: *GameSymbol) !void {
-        self.innerCleanup();
         const state = self.innerGetState();
+        self.innerCleanup();
         self.game_lib.close();
         var game_lib = try std.DynLib.open("zig-out/lib/libloop.so");
         self.game_lib = game_lib;
-        self.innerSetState(state);
         self.innerGetState = game_lib.lookup(getStateT, "getState") orelse unreachable;
         self.innerSetState = game_lib.lookup(setStateT, "setState") orelse unreachable;
         self.innerLoop = game_lib.lookup(loopT, "loop") orelse unreachable;
@@ -71,6 +77,7 @@ const GameSymbol = struct {
         self.innerOnResize = game_lib.lookup(onResizeT, "onResize") orelse unreachable;
 
         self.innerInit();
+        self.innerSetState(state);
     }
     pub fn onResize(self: *GameSymbol) void {
         self.innerOnResize();
@@ -81,15 +88,14 @@ pub fn main() !void {
     const width = 800;
     const height = 600;
     ray.InitWindow(width, height, "Hello raylib from zig");
+    defer ray.CloseWindow();
     const flags = ray.WindowFlags.FLAG_WINDOW_RESIZABLE | ray.WindowFlags.FLAG_WINDOW_TOPMOST;
     ray.SetWindowState(flags);
     ray.SetWindowMinSize(width, height);
     ray.SetTargetFPS(30);
-    defer ray.CloseWindow();
-    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    defer arena.deinit();
 
-    _ = arena.allocator();
+    ray.InitAudioDevice();
+    defer ray.CloseAudioDevice();
 
     var game_symbol = GameSymbol.new();
 
@@ -107,4 +113,5 @@ pub fn main() !void {
         }
         game_symbol.innerLoop();
     }
+    game_symbol.innerCleanup();
 }

@@ -267,6 +267,22 @@ pub const Texture = extern struct {
     format: i32, // Data format (PixelFormat type)
 };
 
+pub const AudioStream = extern struct {
+    buffer: *anyopaque, // Pointer to internal data used by the audio system
+    processor: *anyopaque, // Pointer to internal data processor, useful for audio effects
+    sampleRate: u32, // Frequency (samples per second)
+    sampleSize: u32, // Bit depth (bits per sample): 8, 16, 32 (24 not supported)
+    channels: u32, // Number of channels (1-mono, 2-stereo, ...)
+};
+
+pub const Music = extern struct {
+    stream: AudioStream, // Audio stream
+    frameCount: u32, // Total number of frames (considering channels)
+    looping: bool, // Music looping enable
+    ctxType: i32, // Type of music context (audio filetype)
+    ctxData: *anyopaque, // Audio context data, depends on type
+};
+
 pub extern "c" fn InitWindow(width: c_int, height: c_int, title: [*c]const u8) void;
 pub extern "c" fn IsWindowResized() bool;
 pub extern "c" fn SetWindowState(flags: u32) void;
@@ -307,3 +323,17 @@ pub extern "c" fn UnloadImage(image: Image) void;
 pub extern "c" fn ImageResize(image: *Image, newWidth: i32, newHeight: i32) void; // Resize image (Bicubic scaling algorithm)
 pub extern "c" fn ImageResizeNN(image: *Image, newWidth: i32, newHeight: i32) void;
 pub extern "c" fn SetTargetFPS(fps: i32) void;
+
+pub extern "c" fn LoadMusicStream(fileName: [*c]const u8) Music;
+pub extern "c" fn UnloadMusicStream(music: Music) void;
+pub extern "c" fn UpdateMusicStream(music: Music) void;
+pub extern "c" fn PlayMusicStream(music: Music) void;
+pub extern "c" fn IsMusicStreamPlaying(music: Music) bool;
+pub extern "c" fn StopMusicStream(music: Music) void;
+pub extern "c" fn PauseMusicStream(music: Music) void;
+pub extern "c" fn ResumeMusicStream(music: Music) void;
+pub extern "c" fn SeekMusicStream(music: Music, position: f32) void;
+pub extern "c" fn SetMusicVolume(music: Music, volume: f32) void;
+
+pub extern "c" fn InitAudioDevice() void;
+pub extern "c" fn CloseAudioDevice() void;

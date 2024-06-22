@@ -109,7 +109,7 @@ extern int tinyfd_forceConsole;  /* 0 (default) or 1 */
 /* for unix & windows: 0 (graphic mode) or 1 (console mode).
 0: try to use a graphic solution, if it fails then it uses console mode.
 1: forces all dialogs into console mode even when an X server is present.
-   if enabled, it can use the package Dialog or dialog.exe.
+   if enabled, it can use the package Dialog or dialog.exe.1
    on windows it only make sense for console applications */
 
 extern int tinyfd_assumeGraphicDisplay; /* 0 (default) or 1  */
