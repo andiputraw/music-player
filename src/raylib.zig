@@ -65,6 +65,10 @@ pub const Rectangle = extern struct {
         return Rectangle{ .x = x, .y = y, .width = width, .height = height };
     }
 
+    pub fn newDepend(self: Rectangle, x: f32, y: f32, width: f32, height: f32) Rectangle {
+        return Rectangle{ .x = self.x + x, .y = self.y + y, .width = self.width + width, .height = self.height + height };
+    }
+
     pub fn toString(self: Rectangle, allocator: std.mem.Allocator) []const u8 {
         return std.fmt.allocPrint(allocator, "x: {d}, y: {d}, width: {d}, height: {d} ", .{ self.x, self.y, self.width, self.height }) catch "error";
     }
@@ -283,6 +287,33 @@ pub const Music = extern struct {
     ctxData: *anyopaque, // Audio context data, depends on type
 };
 
+// GlyphInfo, font characters glyphs info
+pub const GlyphInfo = extern struct {
+    value: i32, // Character value (Unicode)
+    offsetX: i32, // Character offset X when drawing
+    offsetY: i32, // Character offset Y when drawing
+    advanceX: i32, // Character advance position X
+    image: Image, // Character image data
+};
+
+// Font, font texture and GlyphInfo array data
+pub const Font = extern struct {
+    baseSize: i32, // Base size (default chars height)
+    glyphCount: i32, // Number of glyph characters
+    glyphPadding: i32, // Padding around the glyph characters
+    texture: Texture, // Texture atlas containing the glyphs
+    recs: *Rectangle, // Rectangles in texture for the glyphs
+    glyphs: *GlyphInfo, // Glyphs info data
+
+    pub fn drawText(self: Font, text: []const u8, position: Vector2, fontSize: f32, color: Color) void {
+        DrawTextEx(self, text.ptr, position, fontSize, 1, color);
+    }
+
+    pub fn measureText(self: Font, text: []const u8, fontSize: f32) Vector2 {
+        return MeasureTextEx(self, text.ptr, fontSize, 1);
+    }
+};
+
 pub extern "c" fn InitWindow(width: c_int, height: c_int, title: [*c]const u8) void;
 pub extern "c" fn IsWindowResized() bool;
 pub extern "c" fn SetWindowState(flags: u32) void;
@@ -337,3 +368,17 @@ pub extern "c" fn SetMusicVolume(music: Music, volume: f32) void;
 
 pub extern "c" fn InitAudioDevice() void;
 pub extern "c" fn CloseAudioDevice() void;
+
+pub extern "c" fn LoadFont(filename: [*c]const u8) Font;
+/// Load font from file with extended parameters, use NULL for codepoints and 0 for codepointCount to load the default character set
+pub extern "c" fn LoadFontEx(fileName: [*c]const u8, fontSize: i32, codepoints: ?*i32, codepointCount: i32) Font;
+pub extern "c" fn UnloadFont(font: Font) void;
+pub extern "c" fn DrawTextEx(font: Font, text: [*c]const u8, position: Vector2, fontSize: f32, spacing: f32, tint: Color) void;
+pub extern "c" fn MeasureTextEx(font: Font, text: [*c]const u8, fontSize: f32, spacing: f32) Vector2;
+
+pub extern "c" fn DrawLine(startPosX: i32, startPosY: i32, endPosX: i32, endPosY: i32, color: Color) void;
+pub extern "c" fn DrawLineV(startPos: Vector2, endPos: Vector2, color: Color) void;
+
+pub extern "c" fn DrawTriangle(v1: Vector2, v2: Vector2, v3: Vector2, color: Color) void;
+
+pub extern "c" fn GetRandomValue(min: i32, max: i32) i32;

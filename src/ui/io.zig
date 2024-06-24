@@ -12,6 +12,8 @@ pub const message = enum {
 pub const message_content = union(message) {
     none: void,
     done: void,
+    /// Open folder selection, return array of path.
+    /// The array will be freed by the io loop after another message is sent, make sure to copy it.
     open_select_folder_for_load_music: ?[][]u8,
 };
 
@@ -45,6 +47,7 @@ pub fn loop() !void {
 
                 while (try music_dir_iterator.next()) |entry| {
                     if (entry.kind == std.fs.File.Kind.directory) continue;
+
                     const entry_path = std.fmt.allocPrint(allocator, "{s}/{s}", .{ dir_path, entry.name }) catch unreachable;
                     musics.append(try allocator.dupe(u8, entry_path)) catch unreachable;
                 }

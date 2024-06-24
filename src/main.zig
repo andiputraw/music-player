@@ -89,7 +89,7 @@ pub fn main() !void {
     const height = 600;
     ray.InitWindow(width, height, "Hello raylib from zig");
     defer ray.CloseWindow();
-    const flags = ray.WindowFlags.FLAG_WINDOW_RESIZABLE | ray.WindowFlags.FLAG_WINDOW_TOPMOST;
+    const flags = ray.WindowFlags.FLAG_WINDOW_RESIZABLE | ray.WindowFlags.FLAG_WINDOW_TOPMOST | ray.WindowFlags.FLAG_WINDOW_ALWAYS_RUN;
     ray.SetWindowState(flags);
     ray.SetWindowMinSize(width, height);
     ray.SetTargetFPS(30);

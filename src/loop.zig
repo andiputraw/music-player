@@ -8,7 +8,7 @@ var innerState: ApplicationState.InnerState = undefined;
 var mem: [1024 * 32]u8 = undefined;
 var fba = std.heap.FixedBufferAllocator.init(&mem);
 const allocator = fba.allocator();
-var musics = std.ArrayList([]u8).init(allocator);
+var fake_spectrum = ui.fake_spectrum{ .rec = ray.Rectangle.new(0, 0, 0, 0), .bar_value = [_]f32{ 0.0, 0.6, 0.9, 0.2, 0.3 } };
 
 export var appState: ApplicationState.StateType = ApplicationState.StateType{
     .directories = ApplicationState.directory_list{ .len = 0, .capacity = 10, .directories = undefined },
@@ -28,7 +28,11 @@ export fn setState(newState: ApplicationState.StateType) void {
     while (i < appState.directories.len) {
         const path: [*c]u8 = &appState.directories.directories[i];
         const music = ray.LoadMusicStream(path);
-        innerState.tracks.track_list.append(ApplicationState.Track{ .file_path = &appState.directories.directories[i], .music = music }) catch @panic("Failed to append music");
+        const path_zig_style: [:0]u8 = std.mem.span(path);
+        const dirAndFilename = getDirAndFilename(path_zig_style);
+        const dir = allocator.dupeZ(u8, dirAndFilename[0]) catch @panic("cannot allocate dir");
+        const filename = allocator.dupeZ(u8, dirAndFilename[1]) catch @panic("cannot allocate filename");
+        innerState.tracks.track_list.append(ApplicationState.Track{ .file_path = &appState.directories.directories[i], .music = music, .dir = dir, .name = filename }) catch @panic("Failed to append music");
         i += 1;
     }
 }
@@ -44,6 +48,8 @@ export fn init() void {
     const prev_button_image = ray.LoadImage("./assets/prev_button.png");
     const next_button_image = ray.LoadImage("./assets/next_button.png");
 
+    innerState.title_font = ray.LoadFontEx("./assets/fonts/Roboto-Medium.ttf", 20, null, 0);
+    innerState.author_font = ray.LoadFontEx("./assets/fonts/Roboto-Regular.ttf", 16, null, 0);
     innerState.loop_button_texture = ray.LoadTextureFromImage(loop_button_img);
     innerState.start_button_texture = ray.LoadTextureFromImage(start_button_img);
     innerState.pause_button_texture = ray.LoadTextureFromImage(pause_button_img);
@@ -76,6 +82,9 @@ export fn cleanup() void {
     ray.UnloadTexture(innerState.prev_button_texture);
     ray.UnloadTexture(innerState.next_button_texture);
     ray.UnloadTexture(innerState.shuffle_button_texture);
+    ray.UnloadFont(innerState.title_font);
+    ray.UnloadFont(innerState.author_font);
+
     std.log.debug("Completed Cleanup", .{});
 }
 
@@ -112,6 +121,31 @@ export fn loop() void {
     }
 }
 
+/// Returns (dir, filename)
+fn getDirAndFilename(path: []u8) [2][]u8 {
+    var i = path.len - 1;
+    while (i > 0) {
+        if (path[i] == '/') {
+            break;
+        }
+        i -= 1;
+    }
+    const path_with_dir = path[0..i];
+    const fileName = path[(i + 1)..(path.len)];
+
+    i = path_with_dir.len - 1;
+    var count: usize = 0;
+    while (i > 0) {
+        count += 1;
+        if (path_with_dir[i] == '/') {
+            break;
+        }
+        i -= 1;
+    }
+    const dir = path_with_dir[(i + 1)..];
+    return .{ dir, fileName };
+}
+
 fn handleMessage() void {
     const res = ui.io.getResponse();
 
@@ -123,11 +157,15 @@ fn handleMessage() void {
         .open_select_folder_for_load_music => |entry| {
             if (entry) |music_paths| {
                 for (music_paths) |path| {
-                    std.log.debug("path: {s}", .{path});
-                    const music = ray.LoadMusicStream(path.ptr);
+                    const clone_path = allocator.dupeZ(u8, path) catch @panic("cannot allocate path");
+                    const music = ray.LoadMusicStream(clone_path.ptr);
+
+                    const dirAndFilename = getDirAndFilename(clone_path);
+                    const dir = allocator.dupeZ(u8, dirAndFilename[0]) catch @panic("cannot allocate dir");
+                    const fileName = allocator.dupeZ(u8, dirAndFilename[1]) catch @panic("cannot allocate filename");
                     appState.directories.append(path) catch @panic("failed to append path");
 
-                    innerState.tracks.track_list.append(.{ .file_path = path, .music = music }) catch @panic("failed to append music");
+                    innerState.tracks.track_list.append(.{ .file_path = clone_path, .music = music, .dir = dir, .name = fileName }) catch @panic("failed to append music");
                 }
             } else {
                 std.log.debug("null", .{});
@@ -162,13 +200,97 @@ fn intToFloat(in: i32) f32 {
 }
 
 pub fn drawMusicList(music_list_rect: ray.Rectangle) void {
-    ray.DrawRectangleRounded(music_list_rect, 0, 4, ray.Color.DARKGRAY);
+    ray.DrawRectangleRounded(music_list_rect, 0, 4, ray.Color.BLACK);
     const music_list_height = 60.0;
     const music_list_width = music_list_rect.width - 20;
-    const musicRect = ray.Rectangle.new(10, 10, music_list_width, music_list_height);
-    const title_rect = ray.Rectangle.new(musicRect.x + 10, musicRect.y + 10, music_list_width - 20, music_list_height / 2);
-    ray.DrawRectangleRec(musicRect, ray.Color.WHITE);
-    ray.DrawRectangleRec(title_rect, ray.Color.RED);
+
+    //headers
+    const header_rect = ray.Rectangle.new(10, 10, music_list_width, music_list_height);
+    const header_number_rect = ray.Rectangle.new(header_rect.x + 10, header_rect.y + 10, music_list_height - 20, music_list_height / 2);
+    const header_number_position = ray.Vector2.new(header_number_rect.x, header_number_rect.y);
+    innerState.title_font.drawText("#", header_number_position, 20, ray.Color.LIGHTGRAY);
+
+    const header_title = ray.Rectangle.new(header_rect.x + 30, header_rect.y + 10, music_list_width - 20, music_list_height / 2);
+    const header_title_position = ray.Vector2.new(header_title.x, header_title.y);
+    innerState.title_font.drawText("Title", header_title_position, 20, ray.Color.LIGHTGRAY);
+
+    var track_iter = innerState.tracks.iterator();
+    var i: i32 = 1;
+    var buffer = [_]u8{0} ** 128;
+    var fba_local = std.heap.FixedBufferAllocator.init(&buffer);
+    const allocator_local = fba_local.allocator();
+
+    while (track_iter.nextDir()) |dir| {
+        const dir_rect = ray.Rectangle.new(10, 0 + (music_list_height * intToFloat(i)) + 20, music_list_width, music_list_height);
+        const text_size = innerState.author_font.measureText(dir, 16);
+        const dir_position = ray.Vector2.new(dir_rect.x + 20, dir_rect.y - 8);
+        // std.debug.print("x: {d} y: {d}\n", .{ text_size.x, text_size.y });
+        const first_dir_start_line = ray.Vector2.new(dir_rect.x, dir_rect.y);
+        const first_dir_end_line = ray.Vector2.new(dir_rect.x + dir_position.x - 12, dir_rect.y);
+
+        const second_dir_start_line = ray.Vector2.new(dir_position.x + text_size.x + 4, dir_rect.y);
+        const second_dir_end_line = ray.Vector2.new(dir_rect.width - dir_position.x, dir_rect.y);
+
+        innerState.author_font.drawText(dir, dir_position, 16, ray.Color.LIGHTGRAY);
+        ray.DrawLineV(first_dir_start_line, first_dir_end_line, ray.Color.LIGHTGRAY);
+        ray.DrawLineV(second_dir_start_line, second_dir_end_line, ray.Color.LIGHTGRAY);
+        i += 1;
+
+        var music_count: i32 = 1;
+        while (track_iter.nextUntilDirectory()) |track| {
+            const music_rect = ray.Rectangle.new(10, (music_list_height * intToFloat(i)), music_list_width, music_list_height);
+            const current_index = track_iter.getIndex() - 1;
+            const on_hover = ray.CheckCollisionPointRec(ray.GetMousePosition(), music_rect);
+            const is_selected = innerState.tracks.selected_track == current_index;
+
+            if (on_hover) {
+                if (ray.IsMouseButtonReleased(ray.MouseButton.MOUSE_BUTTON_LEFT)) {
+                    innerState.tracks.stopSelectedTrack();
+                    innerState.tracks.changeSelectedTrack(current_index);
+                    innerState.tracks.playSelectedTrack();
+                    appState.is_playing = true;
+                }
+                ray.DrawRectangleRounded(music_rect, 0, 4, ray.Color.newFromHex(0x303030));
+            }
+
+            const number_rect = ray.Rectangle.new(music_rect.x + 10, music_rect.y + 15, music_list_height - 20, music_list_height / 2);
+            const number_position = ray.Vector2.new(number_rect.x, number_rect.y);
+
+            if (is_selected) {
+                const fake_spectrum_rec = number_rect.newDepend(-5, 0, -18, 0);
+                fake_spectrum.rec = fake_spectrum_rec;
+                fake_spectrum.draw();
+            } else if (on_hover and !is_selected) {
+                //titik atas
+                const v3 = ray.Vector2.new(number_rect.x, number_rect.y + 3);
+                //titik tinggi
+                const v2 = ray.Vector2.new(number_rect.x + 10, number_rect.y + 10.5);
+                //titik bawah
+                const v1 = ray.Vector2.new(number_rect.x, number_rect.y + 18);
+                ray.DrawTriangle(v1, v2, v3, ray.Color.WHITE);
+            } else {
+                // This should never fail, seriously.
+                const number = std.fmt.allocPrint(allocator_local, "{}", .{music_count}) catch unreachable;
+                innerState.title_font.drawText(number, number_position, 20, ray.Color.WHITE);
+                allocator_local.free(number);
+            }
+
+            const title_rect = ray.Rectangle.new(music_rect.x + 40, music_rect.y + 10, music_list_width - 20, music_list_height / 2);
+            const title_position = ray.Vector2.new(title_rect.x, title_rect.y);
+            const title = track.name;
+            // std.debug.print("current play {} index {}\n", .{ innerState.tracks.selected_track, index });
+            const text_color = if (is_selected) ray.Color.newFromHex(0x10C010) else ray.Color.WHITE;
+            innerState.title_font.drawText(title, title_position, 20, text_color);
+
+            const creator_rect = ray.Rectangle.new(music_rect.x + 40, music_rect.y + 30, music_list_width - 20, music_list_height / 2);
+            const creator_position = ray.Vector2.new(creator_rect.x, creator_rect.y + 2);
+            innerState.author_font.drawText("HOYO-MIX", creator_position, 16, ray.Color.LIGHTGRAY);
+
+            music_count += 1;
+
+            i += 1;
+        }
+    }
 }
 
 pub fn drawMusicNowPlaying(nowPlayingRect: ray.Rectangle) void {
@@ -259,10 +381,8 @@ fn onClickPlay() void {
         innerState.tracks.continuePlaying();
         appState.is_playing = true;
     }
-    appState.is_playing = !appState.is_playing;
 }
 
 fn onClickShuffle() void {
-    innerState.tracks.playSelectedTrack();
     std.debug.print("Shuffle\n", .{});
 }
