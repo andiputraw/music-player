@@ -124,14 +124,18 @@ export fn loop() void {
 /// Returns (dir, filename)
 fn getDirAndFilename(path: []u8) [2][]u8 {
     var i = path.len - 1;
+    var dot_loc = i;
     while (i > 0) {
+        if (path[i] == '.') {
+            dot_loc = i;
+        }
         if (path[i] == '/') {
             break;
         }
         i -= 1;
     }
     const path_with_dir = path[0..i];
-    const fileName = path[(i + 1)..(path.len)];
+    const fileName = path[(i + 1)..(dot_loc)];
 
     i = path_with_dir.len - 1;
     var count: usize = 0;
@@ -256,7 +260,7 @@ pub fn drawMusicList(music_list_rect: ray.Rectangle) void {
             const number_rect = ray.Rectangle.new(music_rect.x + 10, music_rect.y + 15, music_list_height - 20, music_list_height / 2);
             const number_position = ray.Vector2.new(number_rect.x, number_rect.y);
 
-            if (is_selected) {
+            if (is_selected and appState.is_playing) {
                 const fake_spectrum_rec = number_rect.newDepend(-5, 0, -18, 0);
                 fake_spectrum.rec = fake_spectrum_rec;
                 fake_spectrum.draw();
@@ -284,7 +288,7 @@ pub fn drawMusicList(music_list_rect: ray.Rectangle) void {
 
             const creator_rect = ray.Rectangle.new(music_rect.x + 40, music_rect.y + 30, music_list_width - 20, music_list_height / 2);
             const creator_position = ray.Vector2.new(creator_rect.x, creator_rect.y + 2);
-            innerState.author_font.drawText("HOYO-MIX", creator_position, 16, ray.Color.LIGHTGRAY);
+            innerState.author_font.drawText("-", creator_position, 16, ray.Color.LIGHTGRAY);
 
             music_count += 1;
 
@@ -373,7 +377,7 @@ fn onClickDir() void {
     ui.io.postMessage(ui.io.message.open_select_folder_for_load_music);
 }
 
-fn onClickPlay() void {
+fn toogleMusic() void {
     if (innerState.tracks.isPlaying()) {
         innerState.tracks.pausePlaying();
         appState.is_playing = false;
@@ -381,6 +385,10 @@ fn onClickPlay() void {
         innerState.tracks.continuePlaying();
         appState.is_playing = true;
     }
+}
+
+fn onClickPlay() void {
+    toogleMusic();
 }
 
 fn onClickShuffle() void {

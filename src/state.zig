@@ -65,6 +65,7 @@ pub const TracksIterator = struct {
 pub const Tracks = struct {
     track_list: std.ArrayList(Track),
     selected_track: usize = 0,
+    is_music_selected: bool = false,
 
     pub fn iterator(self: *Tracks) TracksIterator {
         return TracksIterator{ .tracks = self, .dir = self.track_list.items[0].dir };
